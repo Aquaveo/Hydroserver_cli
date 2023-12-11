@@ -3,6 +3,7 @@ import httpx
 import pandas as pd
 import argparse
 import logging
+import asyncio
 
 
 logging.basicConfig(level=logging.INFO)
@@ -12,11 +13,11 @@ logger = logging.getLogger(__name__)
 def upload_things(username,password,hydroserver_url,file_path):
     auth=(username,password)
     logger.info(f"Uploading stations to HydroServer: {hydroserver_url}, using file: {file_path}")
-
+    things_endpoint = f"{hydroserver_url}/api/data/things"
     df = pd.read_csv(file_path)
     df['station_name'] = df['name']
     # breakpoint()
-    results = df.apply(make_thing_post_request,args=(hydroserver_url,auth,), axis=1)
+    results = df.apply(make_thing_post_request,args=(things_endpoint,auth,), axis=1)
 
     pass
 
@@ -36,6 +37,7 @@ def make_thing_post_request(row,hydroserver_url,auth):
         'siteType': row.siteType,
         'dataDisclaimer': row.dataDisclaimer,
     }
+    # print(request_body)
     headers = {
         "accept": "application/json",
         "Content-Type": "application/json",
@@ -45,7 +47,7 @@ def make_thing_post_request(row,hydroserver_url,auth):
     logger.info(f"Uploading station {row.name} to HydroServer: {hydroserver_url}, Status Code {response.status_code}")
  
 
-def delete_all_things(username,password,hydroserver_url,file_path):
+def delete_all_things(username,password,hydroserver_url):
     auth=(username,password)
     logger.info(f"Deleting stations from HydroServer: {hydroserver_url}")
     headers = {
@@ -62,7 +64,7 @@ def delete_all_things(username,password,hydroserver_url,file_path):
         logger.info(f"Deleting station {thing['name']} from HydroServer: {hydroserver_url}, Status Code {deleted_thing_response.status_code}")
     pass
 
-def delete_all_datastreams(username,password,hydroserver_url,file_path):
+def delete_all_datastreams(username,password,hydroserver_url):
     auth=(username,password)
     logger.info(f"Deleting data streams from HydroServer: {hydroserver_url}")
     headers = {
@@ -79,25 +81,37 @@ def delete_all_datastreams(username,password,hydroserver_url,file_path):
     pass
 
 
+async def upload_observations(username,password,hydroserver_url,file_path,date_column,value_column):
+    list_async_task = []
 
-def upload_observations(username,password,hydroserver_url,file_path,date_column,value_column):
     auth=(username,password)
     logger.info(f"Uploading observations to HydroServer: {hydroserver_url}, using file: {file_path}")
 
     df = pd.read_csv(file_path)
     # breakpoint()
-
     list_observations = df[[date_column, value_column]].values.tolist()
+    chunk_size = 10000
+    list_chunks = chunk_list(list_observations, chunk_size)
+
     datastream_id_list=df['datastream_id'].unique()
     if len (datastream_id_list) > 1:
         logger.info(f"there is more than one data streamer please correct, and only provide one,{datastream_id_list}")
         return 
     datastream_id = datastream_id_list[0]
-    make_observations_post_request(datastream_id,list_observations,hydroserver_url,auth)
+    for chunk in list_chunks:
+        task_post_observations = asyncio.create_task(
+            make_observations_post_request_async(datastream_id, chunk, hydroserver_url, auth)
+        )
+        list_async_task.append(task_post_observations)
+    results = await asyncio.gather(*list_async_task)
+    return results
+
+    # make_observations_post_request_async(datastream_id,list_observations,hydroserver_url,auth)
 
 
-#helper function to make the http post request 
-def make_observations_post_request(datastream_id,list_observations,hydroserver_url,auth):
+
+async def make_observations_post_request_async(datastream_id, list_observations, hydroserver_url, auth):
+    # mssge_string = "uploading data for {datastream_id}"
     post_body = [
         {
             'Datastream': {
@@ -107,13 +121,67 @@ def make_observations_post_request(datastream_id,list_observations,hydroserver_u
             'dataArray': list_observations
         }
     ]
+
+    headers = {
+        "accept": "application/json",
+        "Content-Type": "application/json",
+    }
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.post(hydroserver_url, headers=headers, json=post_body, auth=auth, timeout=None)
+            logger.info(f"Uploading observations for data stream {datastream_id} to HydroServer: {hydroserver_url}, error code: {response.status_code} error:{response.text}")
+    except httpx.HTTPError as exc:
+        print(f"Error while requesting {exc.request.url!r}.")
+        logger.error(f"Failing Uploading observations for data stream {datastream_id} to HydroServer: {hydroserver_url}, error code: {response.status_code} error:{exc}")
+
+    except Exception as e:
+        logger.error(f"Failing Uploading observations for data stream {datastream_id} to HydroServer: {hydroserver_url}, error:{e}")
+
+
+def upload_observations_sync(username,password,hydroserver_url,file_path,date_column,value_column,datastream_id):
+
+    auth=(username,password)
+    logger.info(f"Uploading observations to HydroServer: {hydroserver_url}, using file: {file_path}")
+    # breakpoint()
+    # file_path = file_path.replace('/edit#gid=', '/export?format=csv&gid=')
+    df = pd.read_csv(file_path)
+    # breakpoint()
+    list_observations = df[[date_column, value_column]].values.tolist()
+    chunk_size = 10000
+    list_chunks = chunk_list(list_observations, chunk_size)
+    api_endpoint = f"{hydroserver_url}/api/sensorthings/v1.1/Observations"        
+
+    # datastream_id_list=df['datastream_id'].unique()
+    # if len (datastream_id_list) > 1:
+    #     logger.info(f"there is more than one data streamer please correct, and only provide one,{datastream_id_list}")
+    #     return 
+    # datastream_id = datastream_id_list[0]
+
+    for chunk in list_chunks:
+        make_observations_post_request(datastream_id, chunk, api_endpoint, auth)
+        logger.info(f"uploading,chunk of {len(chunk)}")
+
+#helper function to make the http post request 
+def make_observations_post_request(datastream_id,list_observations,api_endpoint,auth):
+    post_body = [
+        {
+            'Datastream': {
+                '@iot.id': datastream_id
+            },
+            'components': ['phenomenonTime', 'result'],
+            'dataArray': list_observations
+        }
+    ]
+
     headers = {
         "accept": "application/json",
         "Content-Type": "application/json",
     }
     # breakpoint()
-    response = httpx.post(hydroserver_url, headers=headers, json=post_body, auth=auth)    
-    logger.info(f"Uploading observations for data stream {datastream_id} to HydroServer: {hydroserver_url}, Status Code {response.status_code}")
+    response = httpx.post(api_endpoint, headers=headers, json=post_body, auth=auth,timeout=None)
+    # logger.info(f"{response.text}")
+
+    logger.info(f"Uploading observations for data stream {datastream_id} to HydroServer: {api_endpoint}, Status Code {response.status_code}")
 
 
 def upload_datastreams(username,password,hydroserver_url,file_path):
@@ -169,7 +237,17 @@ def make_datastream_post_request(row,hydroserver_url,auth):
     logger.info(f"Uploading datastream {row.name} to HydroServer: {hydroserver_url}, Status Code {response.status_code}")
 
 
+def chunk_list(input_list, chunk_size):
+    # Initialize an empty list to store the smaller chunks
+    chunks = []
 
+    # Iterate through the input_list in steps of chunk_size
+    for i in range(0, len(input_list), chunk_size):
+        # Append a chunk of the list to the result list
+        chunk = input_list[i:i + chunk_size]
+        chunks.append(chunk)
+
+    return chunks
 def main():
     parser = argparse.ArgumentParser(description="Command-line tool for uploading stations, time series, and datastreams")
 
@@ -191,9 +269,11 @@ def main():
     parser_upload_observations.add_argument("hydroserver_url", help="HydroServer URL")
     parser_upload_observations.add_argument("file_path", help="File path")
     parser_upload_observations.add_argument("date_column", help="Date Column")    
-    parser_upload_observations.add_argument("value_column", help="Value column")    
+    parser_upload_observations.add_argument("value_column", help="Value column")
+    parser_upload_observations.add_argument("datastream_id", help="DataStreamer ID")    
 
-    parser_upload_observations.set_defaults(func=upload_observations)
+
+    parser_upload_observations.set_defaults(func=upload_observations_sync)
 
     # Subparser for uploading datastreams
     parser_upload_datastreams = subparsers.add_parser("upload-datastreams", help="Upload datastreams")
@@ -209,7 +289,7 @@ def main():
     parser_delete_stations.add_argument("username", help="HydroServer Username")
     parser_delete_stations.add_argument("password", help="HydroServer Password")    
     parser_delete_stations.add_argument("hydroserver_url", help="HydroServer URL")
-    parser_delete_stations.add_argument("file_path", help="File path")
+    # parser_delete_stations.add_argument("file_path", help="File path")
     parser_delete_stations.set_defaults(func=delete_all_things)
 
     # Subparser for deleting all streamers
@@ -217,7 +297,7 @@ def main():
     parser_delete_stations.add_argument("username", help="HydroServer Username")
     parser_delete_stations.add_argument("password", help="HydroServer Password")    
     parser_delete_stations.add_argument("hydroserver_url", help="HydroServer URL")
-    parser_delete_stations.add_argument("file_path", help="File path")
+    # parser_delete_stations.add_argument("file_path", help="File path")
     parser_delete_stations.set_defaults(func=delete_all_datastreams)
 
     args = parser.parse_args()
@@ -225,7 +305,11 @@ def main():
 
     if hasattr(args, "func"):
         if hasattr(args, "date_column") and hasattr(args, "value_column"):
-            args.func(args.username, args.password, args.hydroserver_url, args.file_path,args.date_column,args.value_column)
+            # asyncio.run(args.func(args.username, args.password, args.hydroserver_url, args.file_path,args.date_column,args.value_column))
+            args.func(args.username, args.password, args.hydroserver_url, args.file_path,args.date_column,args.value_column, args.datastream_id)
+
+        elif not hasattr(args, "file_path"):
+            args.func(args.username, args.password, args.hydroserver_url)
         else:
             args.func(args.username, args.password, args.hydroserver_url, args.file_path)
     else:
@@ -233,3 +317,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+    # asyncio.run(main())
