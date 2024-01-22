@@ -1,0 +1,8 @@
+name: hs2
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - python=3.11
+  - httpx
+  - pandas

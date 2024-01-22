@@ -16,10 +16,10 @@ git clone <repository_url>
 cd Hydroserver_cli
 ```
 
-2. **Install the required packages:**
+2. **Create the following env:**
 
 ```github
-pip install -r requirements.txt
+conda env create -f environment.yaml
 ```
 
 ## Usage
