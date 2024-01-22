@@ -13,7 +13,7 @@ This Python script provides a command-line interface for uploading stations, obs
 
 ```github
 git clone <repository_url>
-cd hydroserver-uploader
+cd Hydroserver_cli
 ```
 
 2. **Install the required packages:**
@@ -29,7 +29,7 @@ pip install -r requirements.txt
 To upload stations to a HydroServer, use the following command:
 
 ```github
-python hydroserver_uploader.py upload-things <username> <password> <hydroserver_url> <file_path>
+python upload_data.py upload-things <username> <password> <hydroserver_url> <file_path>
 
 ```
 
@@ -43,7 +43,7 @@ python hydroserver_uploader.py upload-things <username> <password> <hydroserver_
 To upload observations to a HydroServer, use the following command:
 
 ```github
-python hydroserver_uploader.py upload-observations <username> <password> <hydroserver_url> <file_path> <date_column> <value_column> <datastream_id>
+python upload_data.py upload-observations <username> <password> <hydroserver_url> <file_path> <date_column> <value_column> <datastream_id>
 ```
 
 - `<username>`: HydroServer username
@@ -59,7 +59,7 @@ python hydroserver_uploader.py upload-observations <username> <password> <hydros
 To delete all stations from a HydroServer, use the following command:
 
 ```github
-python hydroserver_uploader.py delete-all-things <username> <password> <hydroserver_url>
+python upload_data.py delete-all-things <username> <password> <hydroserver_url>
 ```
 
 - `<username>`: HydroServer username

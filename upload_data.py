@@ -52,13 +52,14 @@ def delete_all_things(username,password,hydroserver_url):
         "accept": "application/json",
         "Content-Type": "application/json",
     }
-    things_list_json = httpx.get(hydroserver_url, headers=headers, auth=auth)
+    things_endpoint = f"{hydroserver_url}/api/data/things"
+    things_list_json = httpx.get(things_endpoint, headers=headers, auth=auth)
 
     for thing in things_list_json.json():
         # data = {'thing_id': thing['id']}
         thing_id = thing['id']
         # breakpoint()
-        deleted_thing_response = httpx.delete(f'{hydroserver_url}/{thing_id}',auth=auth)
+        deleted_thing_response = httpx.delete(f'{things_endpoint}/{thing_id}',auth=auth)
         logger.info(f"Deleting station {thing['name']} from HydroServer: {hydroserver_url}, Status Code {deleted_thing_response.status_code}")
     pass
 
