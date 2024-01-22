@@ -3,8 +3,6 @@ import httpx
 import pandas as pd
 import argparse
 import logging
-import asyncio
-
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -80,82 +78,17 @@ def delete_all_datastreams(username,password,hydroserver_url):
         logger.info(f"Deleting station {datastream['name']} from HydroServer: {hydroserver_url}, Status Code {deleted_thing_response.status_code}")
     pass
 
-
-async def upload_observations(username,password,hydroserver_url,file_path,date_column,value_column):
-    list_async_task = []
-
-    auth=(username,password)
-    logger.info(f"Uploading observations to HydroServer: {hydroserver_url}, using file: {file_path}")
-
-    df = pd.read_csv(file_path)
-    # breakpoint()
-    list_observations = df[[date_column, value_column]].values.tolist()
-    chunk_size = 10000
-    list_chunks = chunk_list(list_observations, chunk_size)
-
-    datastream_id_list=df['datastream_id'].unique()
-    if len (datastream_id_list) > 1:
-        logger.info(f"there is more than one data streamer please correct, and only provide one,{datastream_id_list}")
-        return 
-    datastream_id = datastream_id_list[0]
-    for chunk in list_chunks:
-        task_post_observations = asyncio.create_task(
-            make_observations_post_request_async(datastream_id, chunk, hydroserver_url, auth)
-        )
-        list_async_task.append(task_post_observations)
-    results = await asyncio.gather(*list_async_task)
-    return results
-
-    # make_observations_post_request_async(datastream_id,list_observations,hydroserver_url,auth)
-
-
-
-async def make_observations_post_request_async(datastream_id, list_observations, hydroserver_url, auth):
-    # mssge_string = "uploading data for {datastream_id}"
-    post_body = [
-        {
-            'Datastream': {
-                '@iot.id': datastream_id
-            },
-            'components': ['phenomenonTime', 'result'],
-            'dataArray': list_observations
-        }
-    ]
-
-    headers = {
-        "accept": "application/json",
-        "Content-Type": "application/json",
-    }
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(hydroserver_url, headers=headers, json=post_body, auth=auth, timeout=None)
-            logger.info(f"Uploading observations for data stream {datastream_id} to HydroServer: {hydroserver_url}, error code: {response.status_code} error:{response.text}")
-    except httpx.HTTPError as exc:
-        print(f"Error while requesting {exc.request.url!r}.")
-        logger.error(f"Failing Uploading observations for data stream {datastream_id} to HydroServer: {hydroserver_url}, error code: {response.status_code} error:{exc}")
-
-    except Exception as e:
-        logger.error(f"Failing Uploading observations for data stream {datastream_id} to HydroServer: {hydroserver_url}, error:{e}")
-
-
 def upload_observations_sync(username,password,hydroserver_url,file_path,date_column,value_column,datastream_id):
 
     auth=(username,password)
     logger.info(f"Uploading observations to HydroServer: {hydroserver_url}, using file: {file_path}")
-    # breakpoint()
-    # file_path = file_path.replace('/edit#gid=', '/export?format=csv&gid=')
     df = pd.read_csv(file_path)
-    # breakpoint()
     list_observations = df[[date_column, value_column]].values.tolist()
+
     chunk_size = 10000
     list_chunks = chunk_list(list_observations, chunk_size)
-    api_endpoint = f"{hydroserver_url}/api/sensorthings/v1.1/Observations"        
+    api_endpoint = f"{hydroserver_url}/api/sensorthings/v1.1/CreateObservations"        
 
-    # datastream_id_list=df['datastream_id'].unique()
-    # if len (datastream_id_list) > 1:
-    #     logger.info(f"there is more than one data streamer please correct, and only provide one,{datastream_id_list}")
-    #     return 
-    # datastream_id = datastream_id_list[0]
 
     for chunk in list_chunks:
         make_observations_post_request(datastream_id, chunk, api_endpoint, auth)
@@ -177,9 +110,8 @@ def make_observations_post_request(datastream_id,list_observations,api_endpoint,
         "accept": "application/json",
         "Content-Type": "application/json",
     }
-    # breakpoint()
+    
     response = httpx.post(api_endpoint, headers=headers, json=post_body, auth=auth,timeout=None)
-    # logger.info(f"{response.text}")
 
     logger.info(f"Uploading observations for data stream {datastream_id} to HydroServer: {api_endpoint}, Status Code {response.status_code}")
 
@@ -248,6 +180,7 @@ def chunk_list(input_list, chunk_size):
         chunks.append(chunk)
 
     return chunks
+
 def main():
     parser = argparse.ArgumentParser(description="Command-line tool for uploading stations, time series, and datastreams")
 
@@ -289,7 +222,6 @@ def main():
     parser_delete_stations.add_argument("username", help="HydroServer Username")
     parser_delete_stations.add_argument("password", help="HydroServer Password")    
     parser_delete_stations.add_argument("hydroserver_url", help="HydroServer URL")
-    # parser_delete_stations.add_argument("file_path", help="File path")
     parser_delete_stations.set_defaults(func=delete_all_things)
 
     # Subparser for deleting all streamers
@@ -297,7 +229,6 @@ def main():
     parser_delete_stations.add_argument("username", help="HydroServer Username")
     parser_delete_stations.add_argument("password", help="HydroServer Password")    
     parser_delete_stations.add_argument("hydroserver_url", help="HydroServer URL")
-    # parser_delete_stations.add_argument("file_path", help="File path")
     parser_delete_stations.set_defaults(func=delete_all_datastreams)
 
     args = parser.parse_args()
@@ -317,4 +248,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    # asyncio.run(main())
