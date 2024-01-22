@@ -35,8 +35,8 @@ python hydroserver_uploader.py upload-things <username> <password> <hydroserver_
 
 - `<username>`: HydroServer username
 - `<password>`: HydroServer password
-- `<hydroserver_url>`: HydroServer URL
-- `<file_path>`: Path to the file containing station information (CSV format)
+- `<hydroserver_url>`: HydroServer URL, (**Do not put a trailing slash)**
+- **`<file_path>`: **Path to the file containing station information (CSV format)
 
 ### Upload Observations
 
@@ -48,7 +48,7 @@ python hydroserver_uploader.py upload-observations <username> <password> <hydros
 
 - `<username>`: HydroServer username
 - `<password>`: HydroServer password
-- `<hydroserver_url>`: HydroServer URL
+- `<hydroserver_url>`: HydroServer URL (**Do not put a trailing slash)**
 - `<file_path>`: Path to the file containing observation data (CSV format)
 - `<date_column>`: Column name for date values
 - `<value_column>`: Column name for observation values
@@ -64,7 +64,7 @@ python hydroserver_uploader.py delete-all-things <username> <password> <hydroser
 
 - `<username>`: HydroServer username
 - `<password>`: HydroServer password
-- `<hydroserver_url>`: HydroServer URL
+- `<hydroserver_url>`: HydroServer URL (**Do not put a trailing slash)**
 
 ## Notes
 
